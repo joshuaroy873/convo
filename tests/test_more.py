@@ -287,19 +287,21 @@ def test_stats_panel_counts_everything_and_shrinks():
     from convo.common import Conv
 
     now = time.mktime((2026, 11, 11, 15, 0, 0, 0, 0, -1))
-    styles = {"claude": "red", "codex": "green", "agy": "blue"}
-    convs = [Conv(tool=t, id=f"{t}{i}", title="x", cwd="/p", origin="cli", created=now - d * 86400, updated=now - d * 86400,
+    tools, vias = {"claude": "red", "codex": "green", "agy": "blue"}, {"cli": "", "vscode": "", "ide": ""}
+    convs = [Conv(tool=t, id=f"{t}{i}", title="x", cwd="/p", origin=v, created=now - d * 86400, updated=now - d * 86400,
                   size=1024, nmsg=10, paths=[])
-             for i, (t, d) in enumerate([("claude", 0), ("claude", 0), ("claude", 3), ("codex", 9), ("agy", 40)])]
-    wide = stats.panel(convs, styles, 4, 120, now).plain.split("\n")
+             for i, (t, v, d) in enumerate([("claude", "cli", 0), ("claude", "vscode", 0), ("claude", "cli", 3),
+                                            ("codex", "vscode", 9), ("agy", "ide", 40)])]
+    wide = stats.panel(convs, tools, vias, 4, 120, now).plain.split("\n")
     assert len(wide) == 3
-    assert wide[0].startswith("claude ") and " 3 " in wide[0] and "5 chats" in wide[0] and "last 14 days" in wide[0]
-    assert "50 messages" in wide[1] and "today 2 · this week 3" in wide[1]
-    assert "on disk" in wide[2] and "trash 4" in wide[2]
-    medium = stats.panel(convs, styles, 4, 70, now).plain
-    assert "50 messages" in medium and "today" not in medium
-    assert stats.panel(convs, styles, 4, 40, now).plain == "5 chats  claude 3  codex 1  agy 1  trash 4"
-    assert stats.panel([], styles, 0, 120, now).plain.count("\n") == 2
+    assert wide[0].startswith("claude ") and " 3 " in wide[0] and "cli " in wide[0] and "5 chats" in wide[0]
+    assert "last 14 days" in wide[0]
+    assert "vscode" in wide[1] and "50 messages" in wide[1] and "today 2 · this week 3" in wide[1]
+    assert "ide " in wide[2] and "on disk" in wide[2] and "trash 4" in wide[2]
+    medium = stats.panel(convs, tools, vias, 4, 70, now).plain
+    assert "vscode" in medium and "50 messages" in medium and "today" not in medium
+    assert stats.panel(convs, tools, vias, 4, 40, now).plain == "5 chats  claude 3  codex 1  agy 1  trash 4"
+    assert stats.panel([], tools, vias, 0, 120, now).plain.count("\n") == 2
 
 
 def test_list_shows_the_stats_panel(stores):

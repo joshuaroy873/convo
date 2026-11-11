@@ -655,7 +655,7 @@ class ConvoApp(App):
         return out
 
     def fill(self, keep: str | None = None) -> None:
-        self.query_one("#stats", Static).update(stats.panel(self.all, TOOL_STYLE, len(trash.entries()), self.size.width - 2))
+        self.query_one("#stats", Static).update(stats.panel(self.all, TOOL_STYLE, VIA_STYLE, len(trash.entries()), self.size.width - 2))
         t = self.query_one("#table", DataTable)
         cur = self.row_item()
         # self.sel remembers the selection while a filter hides it, e.g. right after a rename

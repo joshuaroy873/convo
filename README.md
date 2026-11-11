@@ -42,7 +42,7 @@ Requires Python 3.11+. The command is `convo`.
 
 Run `convo` for the interactive view, or `convo some words` to open it already searched.
 
-The panel at the top counts everything convo found: conversations per tool, totals, and how many were last active on each of the past 14 days. It stays the same while you search; `s` gives fuller stats for what is listed.
+The panel at the top counts everything convo found: conversations per tool and per place they were started, totals, and how many were last active on each of the past 14 days. It stays the same while you search; `s` gives fuller stats for what is listed.
 
 | Key | In the list | Inside a conversation |
 |---|---|---|

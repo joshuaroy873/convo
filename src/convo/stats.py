@@ -11,7 +11,7 @@ from .common import Conv, human_size, short_path, when
 
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 SPARK = "▁▂▃▄▅▆▇█"
-BAR = 20
+BAR = 10
 
 
 def _bar(n: int, top: int, width: int = 28) -> str:
@@ -50,35 +50,54 @@ def report(convs: list[Conv], trashed: int = 0) -> str:
     return "\n".join(out)
 
 
-def panel(convs: list[Conv], styles: dict[str, str], trashed: int = 0, width: int = 100, now: float | None = None) -> Text:
-    """Three rows for the top of the list: share per tool, totals, and recent activity.
+def _bars(count: Counter, styles: dict[str, str], total: int) -> list[Text]:
+    names, digits = max(map(len, styles)), len(str(max(count.values(), default=0)))
+    rows = []
+    for name, style in styles.items():
+        n = count[name]
+        full = max(1 if n else 0, round(BAR * n / total)) if total else 0
+        rows.append(Text.assemble((f"{name:{names}} ", style), ("█" * full, style), ("░" * (BAR - full), "dim"),
+                                  (f" {n:>{digits}}", "bold")))
+    return rows
 
-    Narrower than 90 columns the activity column is left out; narrower than 58 it is one line of counts.
+
+def panel(convs: list[Conv], tools: dict[str, str], vias: dict[str, str], trashed: int = 0, width: int = 100,
+          now: float | None = None) -> Text:
+    """Three rows for the top of the list: share per tool, share per origin, totals, recent activity.
+
+    `tools` and `vias` map each name to its colour. Columns that do not fit are left out from the
+    right, and a very narrow screen gets one line of counts.
     """
     now = datetime.now().timestamp() if now is None else now
     total = len(convs)
-    count = Counter(c.tool for c in convs)
-    if width < 58:
-        line = Text(f"{total} chats")
-        for tool, style in styles.items():
-            line.append("  ").append(f"{tool} {count[tool]}", style)
-        return line.append(f"  trash {trashed}" if trashed else "")
-    nmsg = sum(c.nmsg for c in convs)
-    middle = [f"{total:,} chats", f"{nmsg:,} messages", f"{human_size(sum(c.size for c in convs))} on disk"]
+    by_tool = Counter(c.tool for c in convs)
     # each conversation counts once, on the day it was last active
     midnight = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     ago = Counter(int((midnight - c.updated) // 86400) + 1 if c.updated < midnight else 0 for c in convs)
     days = [ago[d] for d in range(13, -1, -1)]
     top = max(days) or 1
     spark = "".join(SPARK[0] if not n else SPARK[max(1, round(n / top * 7))] for n in days)
-    right = [("last 14 days  ", spark), (f"today {ago[0]} · this week {sum(days[-7:])}", ""), (f"trash {trashed}", "")]
-    names, digits, mid = max(map(len, styles)), len(str(max(count.values(), default=0))), max(map(len, middle))
+    columns = [
+        _bars(by_tool, tools, total),
+        _bars(Counter(c.origin for c in convs), vias, total),
+        [Text(f"{total:,} chats"), Text(f"{sum(c.nmsg for c in convs):,} messages"),
+         Text(f"{human_size(sum(c.size for c in convs))} on disk")],
+        [Text.assemble(("last 14 days  ", "dim"), (spark, "bold")), Text(f"today {ago[0]} · this week {sum(days[-7:])}"),
+         Text(f"trash {trashed}")],
+    ]
+    widths = [max(cell.cell_len for cell in col) for col in columns]
+    fit = len(columns)
+    while fit and sum(widths[:fit]) + 3 * (fit - 1) > width:
+        fit -= 1
+    if fit < 3:
+        line = Text(f"{total} chats")
+        for tool, style in tools.items():
+            line.append("  ").append(f"{tool} {by_tool[tool]}", style)
+        return line.append(f"  trash {trashed}" if trashed else "")
     out = Text()
-    for i, (tool, style) in enumerate(styles.items()):
-        n = count[tool]
-        full = max(1 if n else 0, round(BAR * n / total)) if total else 0
-        out.append("\n" if i else "").append(f"{tool:{names}} ", style).append("█" * full, style).append("░" * (BAR - full), "dim")
-        out.append(f" {n:>{digits}}", "bold").append(" │ ", "dim").append(f"{middle[i]:{mid}}" if i < 3 else " " * mid)
-        if width >= 90 and i < 3:
-            out.append(" │ ", "dim").append(right[i][0], "dim" if right[i][1] else "").append(right[i][1], "bold")
+    for row in range(3):
+        out.append("\n" if row else "")
+        for i in range(fit):
+            cell = columns[i][row] if row < len(columns[i]) else Text()
+            out.append(" │ " if i else "", "dim").append_text(cell).append(" " * (widths[i] - cell.cell_len) if i < fit - 1 else "")
     return out
