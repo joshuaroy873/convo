@@ -558,10 +558,10 @@ class ConvoApp(App):
         Binding("slash", "filter", "Search"),
         Binding("t", "tool", "Tool", show=False),
         Binding("o", "sort", "Sort", show=False),
-        Binding("r", "resume", "Resume", show=False),
+        Binding("r", "resume", "Resume"),
         Binding("n", "rename", "Rename"),
         Binding("s", "stats", "Stats"),
-        Binding("space", "mark", "Mark"),
+        Binding("space", "mark", "Mark", show=False),  # in the ? help; the bar has no room for it
         Binding("d", "trash", "Trash", key_display="d /", group=TRASH_KEYS),
         Binding("u", "undo", "Undo trash", group=TRASH_KEYS),
         Binding("e", "export('md')", "Export", show=False),
