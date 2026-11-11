@@ -11,7 +11,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Joshua Roy Palathinkal" }]
 requires-python = ">=3.11"
-dependencies = ["textual>=1.0"]
+dependencies = ["textual>=8.2"]
 keywords = ["claude", "codex", "antigravity", "tui", "conversations"]
 classifiers = [
     "Development Status :: 4 - Beta",

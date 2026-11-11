@@ -107,7 +107,7 @@ def test_stats_screen_covers_what_is_listed(stores):
         screen = app.screen
         assert isinstance(screen, Stats) and len(screen.convs) == 4 and "all 4 conversations" in screen.scope
         shown = "\n".join(strip.text for strip in screen.query_one("#log").lines)
-        assert "conversations   4" in shown and "By tool" in shown and "Busiest projects" in shown
+        assert "chats" in shown and "By tool" in shown and "By weekday" in shown and "Busiest projects" in shown
         await pilot.press("escape", "slash", *"tool:codex", "enter", "s")
         await pilot.pause()
         assert len(app.screen.convs) == 1 and "tool:codex" in app.screen.scope
@@ -314,3 +314,29 @@ def test_list_shows_the_stats_panel(stores):
         assert "4 chats" in str(app.query_one("#stats").render())  # the panel is about everything, searched or not
         assert "1 of 4 shown" in str(app.query_one("#status").render())
     drive(script)
+
+
+def test_stats_view_draws_every_section():
+    import time
+
+    from rich.console import Console
+
+    from convo import stats
+    from convo.common import Conv
+
+    now = time.mktime((2026, 11, 11, 15, 0, 0, 0, 0, -1))
+    tools, vias = {"claude": "red", "codex": "green", "agy": "blue"}, {"cli": "", "vscode": "", "ide": ""}
+    convs = [Conv(tool=t, id=f"{t}{i}", title="x", cwd=f"/work/{t}", origin=v, created=now - d * 86400, updated=now - d * 86400,
+                  size=2048, nmsg=10 * (i + 1), paths=[])
+             for i, (t, v, d) in enumerate([("claude", "cli", 0), ("claude", "vscode", 2), ("codex", "vscode", 9)])]
+    for width in (120, 70):  # side by side, then stacked
+        console = Console(width=width, record=True, force_terminal=False)
+        console.print(stats.view(convs, tools, vias, 4, width, now))
+        text = console.export_text()
+        for part in ("60", "messages", "in the trash", "By tool", "claude", "67%", "By where it was started", "vscode",
+                     "last active, past", "By weekday", "Wed", "By time of day", "15–18h", "Busiest projects", "/work/codex"):
+            assert part in text, (width, part)
+        assert all(len(line) <= width for line in text.splitlines())
+    empty = Console(record=True, width=80)
+    empty.print(stats.view([], tools, vias))
+    assert "No conversations." in empty.export_text()

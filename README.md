@@ -24,6 +24,8 @@ One terminal view of every conversation you've had with **Claude Code**, **Codex
 - **Antigravity IDE conversations are only partly supported.** They can be listed, searched, read, renamed, trashed and exported. Resuming them is untested: convo hands the id to the `agy` CLI, which keeps its own store apart from the IDE's, so it may not open. If it does not, reopen the conversation in the IDE.
 - **No editing.** convo never changes what was said in a conversation.
 - **A running tool may lag.** An open VS Code panel or IDE can keep showing an old title or a trashed conversation until it restarts.
+- **Memory notes are Claude Code's only.** The `m` screen does not cover Codex or Antigravity.
+- **Undo is for trash only.** `u` restores the last thing trashed; a rename is undone by renaming again.
 - **Helper threads are hidden.** Codex subagent and `codex exec` threads are not listed.
 
 > **convo edits other tools' private data.** Rename and trash write to storage that Claude Code, Codex and Antigravity do not document and may change in any release. Trash is reversible until you empty it, and convo refuses to write when a store looks unfamiliar, but keep a backup of anything you cannot afford to lose.
@@ -55,12 +57,12 @@ The panel at the top counts everything convo found: conversations per tool and p
 | `y` | copy the command that resumes it | |
 | `n` | rename | next match (`N` previous) |
 | `space` | mark for a bulk trash | |
-| `d` / `u` | trash the marked ones (or this one) / undo the last trash | |
+| `d` / `u` | trash the marked ones (or this one) / undo the last trash (`u` undoes trashing only, not a rename or anything else) | |
 | `e` / `E` | export Markdown / JSON | export Markdown |
 | `[` `]` | | previous / next prompt |
 | `s` | stats for the conversations listed | |
 | `g` | quit, leaving your shell in the conversation's folder | |
-| `m` | Claude's memory notes | |
+| `m` | Claude Code's memory notes (Claude only) | |
 | `c` | clean up orphans | |
 | `?` | show all keys | show all keys |
 | `esc` | clear marks, then the search | back |
@@ -129,7 +131,7 @@ A program cannot change the folder of the shell that started it, so `g` needs a 
 
 ### Claude's memory notes
 
-`m` (or `convo memory`) lists the notes Claude Code keeps per project between sessions, with the conversation that wrote each. Enter reads one; `d` moves it to the trash.
+`m` (or `convo memory`) lists the notes Claude Code keeps per project between sessions, with the conversation that wrote each. This is for Claude Code only: Codex and Antigravity memory is not shown. Enter reads one; `d` moves it to the trash.
 
 ## Trash
 

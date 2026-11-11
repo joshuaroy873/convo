@@ -22,6 +22,7 @@ from .query import parse
 from .sources import claude
 
 TOOL_STYLE = {"claude": "dark_orange", "codex": "green3", "agy": "dodger_blue1"}
+TRASH_KEYS = Binding.Group("Trash / undo")  # the bottom bar shows both keys under one label
 VIA_STYLE = {"cli": "khaki1", "vscode": "medium_purple1", "ide": "aquamarine3"}
 SORTS = [
     ("updated", lambda c: -c.updated),
@@ -242,7 +243,15 @@ class Stats(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#log", RichLog).write(Text(stats.report(self.convs, len(trash.entries()))))
+        self.draw()
+
+    def draw(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.clear()
+        log.write(stats.view(self.convs, TOOL_STYLE, VIA_STYLE, len(trash.entries()), self.size.width - 4), expand=True)
+
+    def on_resize(self) -> None:
+        self.draw()
 
     def action_back(self) -> None:
         self.dismiss()
@@ -527,6 +536,7 @@ class Viewer(Screen):
 
 class ConvoApp(App):
     TITLE = "convo"
+    ENABLE_COMMAND_PALETTE = False  # every action already has a key, and the bottom bar needs the room
     CSS = """
     #stats { height: auto; background: $boost; padding: 0 1; }
     #status { height: 1; background: $primary-darken-2; color: $text; padding: 0 1; }
@@ -549,16 +559,16 @@ class ConvoApp(App):
         Binding("t", "tool", "Tool", show=False),
         Binding("o", "sort", "Sort", show=False),
         Binding("r", "resume", "Resume", show=False),
-        Binding("n", "rename", "Rename", show=False),
+        Binding("n", "rename", "Rename"),
         Binding("s", "stats", "Stats"),
         Binding("space", "mark", "Mark"),
-        Binding("d", "trash", "Trash"),
-        Binding("u", "undo", "Undo trash"),
+        Binding("d", "trash", "Trash", key_display="d /", group=TRASH_KEYS),
+        Binding("u", "undo", "Undo trash", group=TRASH_KEYS),
         Binding("e", "export('md')", "Export", show=False),
         Binding("y", "copy", "Copy command", show=False),
         Binding("b", "group", "Group"),
         Binding("g", "goto", "Go to folder", show=False),
-        Binding("m", "memory", "Memory"),
+        Binding("m", "memory", "Claude memory"),
         Binding("c", "cleanup", "Clean up"),
         Binding("question_mark,f1", "help", "Help"),
         Binding("E", "export('json')", "Export JSON", show=False),
