@@ -4,9 +4,13 @@ Ever lost a conversation because you couldn't remember if it was in Claude Code,
 
 **convo** puts them all in one terminal list that you can search, read, resume, rename and trash.
 
+## Screenshot
+
 ![convo listing conversations from Claude Code, Codex and Antigravity](docs/screenshot.png)
 
-![A short tour: searching, reading a conversation, stats, and trashing with undo](docs/demo.gif)
+## Demo
+
+![A short tour: searching, reading a conversation, resuming it in Claude Code, and stats](docs/demo.gif)
 
 ## What it can do
 
