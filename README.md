@@ -1,8 +1,12 @@
 # convo
 
-One terminal view of every conversation you've had with **Claude Code**, **Codex** and **Antigravity (agy)**, whether it started in the CLI or in VS Code. Browse, search, read, resume, rename, trash and export them from one place.
+Ever lost a conversation because you couldn't remember if it was in Claude Code, Codex or Antigravity, or whether you started it in the terminal or VS Code? Or ever wondered how many old AI chats are sitting on your disk, with no good way to clean them up?
+
+**convo** puts them all in one terminal list that you can search, read, resume, rename and trash.
 
 ![convo listing conversations from Claude Code, Codex and Antigravity](docs/screenshot.png)
+
+![A short tour: searching, reading a conversation, stats, and trashing with undo](docs/demo.gif)
 
 ## What it can do
 
@@ -173,7 +177,7 @@ pytest
 ruff check .
 ```
 
-`python docs/screenshot.py` redraws the screenshot above from invented conversations (it needs Firefox for the PNG).
+`python docs/screenshot.py` redraws the screenshot above from invented conversations (it needs Firefox for the PNG). Add `--demo` to redraw the animated tour, which also needs ffmpeg; its Claude Code scene is recorded from the real program when `claude` and the `pyte` package are installed.
 
 The tests build small made-up stores for each tool in a temporary folder; they never read a real home directory.
 
