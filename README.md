@@ -14,14 +14,14 @@ Ever lost a conversation because you couldn't remember if it was in Claude Code,
 
 ## What it can do
 
-- **List everything in one place:** conversations from Claude Code, Codex and Antigravity, started in a terminal, a VS Code panel or the Antigravity IDE.
+- **List everything in one place:** conversations from Claude Code, Codex and Antigravity, started in a terminal (CLI), a VS Code panel or the Antigravity IDE.
 - **Search:** titles, project folders, and everything said inside the conversations.
-- **Read:** open any conversation, with or without tool output and thinking.
-- **Resume:** reopen a conversation in the terminal program of the tool that owns it.
+- **Read:** open any conversation. By default you see only what you and the assistant said; press `t` to also show the commands it ran, their output, and its reasoning.
+- **Resume:** reopen a conversation in the terminal (CLI) version of the tool that owns it.
 - **Rename:** the new title shows up in the owning tool as well.
-- **Trash and restore:** nothing is erased until you empty convo's trash.
+- **Trash and restore:** nothing is permanently erased until you empty convo's trash.
 - **Export:** Markdown or JSON.
-- **Clean up:** find empty conversations and files a tool left behind.
+- **Clean up:** find empty conversations and orphan files a tool left behind.
 - **Stats:** counts per tool, messages, disk use and recent activity.
 
 ## What it cannot do
