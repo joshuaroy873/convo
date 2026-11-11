@@ -37,14 +37,37 @@ def resolve(convs: list[Conv], ref: str) -> Conv:
     raise SystemExit(f"no conversation matches {ref!r}" if not hits else f"{ref!r} is ambiguous ({len(hits)} matches)")
 
 
-def find(convs: list[Conv], text: str) -> Conv:
-    """A conversation by id prefix, or else the most recent one matching a filter."""
+def text_of(conv: Conv) -> str:
+    """Everything said in a conversation, tool output included, as one string."""
+    return "\n".join(m.text for m in messages(conv))
+
+
+def search(convs: list[Conv], query: str) -> list[Conv]:
+    """Conversations matching a query. A transcript is only read when the
+    title and project did not already settle the question."""
     from .query import parse
+    q = parse(query)
+    out = []
+    for c in convs:
+        if not q.terms(c):
+            continue
+        if q.match(c):
+            out.append(c)
+        elif q.words:
+            try:
+                if q.match(c, text_of(c).lower()):
+                    out.append(c)
+            except Exception:  # an unreadable transcript simply does not match
+                pass
+    return out
+
+
+def find(convs: list[Conv], text: str) -> Conv:
+    """A conversation by id prefix, or else the most recent one matching a query."""
     ref = text.split(":", 1)[-1] if text.split(":", 1)[0] in SOURCES else text
     hits = [c for c in convs if c.id.startswith(ref)]
     if len(hits) != 1:
-        q = parse(text)
-        hits = sorted((c for c in convs if q.match(c)), key=lambda c: -c.updated)
+        hits = sorted(search(convs, text), key=lambda c: -c.updated)
     if not hits:
         raise SystemExit(f"no conversation matches {text!r}")
     return hits[0]

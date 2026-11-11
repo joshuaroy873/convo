@@ -1,6 +1,7 @@
 """The interactive view and the command line, driven without a real terminal."""
 
 import asyncio
+import json
 
 from textual.widgets import DataTable, Input, RichLog
 
@@ -11,7 +12,7 @@ from convo.tui import ConvoApp, Viewer
 
 def drive(script, query="", **settings):
     async def main():
-        app = ConvoApp(query, config.Config(**{"enter": "open", **settings}))
+        app = ConvoApp(query, config.Config(**settings))
         async with app.run_test(size=(140, 36)) as pilot:
             await pilot.pause()
             await script(app, pilot)
@@ -48,17 +49,52 @@ def test_list_filter_and_view(stores):
     drive(script)
 
 
-def test_full_text_search_finds_tool_output(stores):
+def test_search_looks_inside_conversations(stores):
     async def script(app, pilot):
-        await pilot.press("s", *"narwhal", "enter")
+        await pilot.press("slash", *"narwhal")  # a word that only appears in agy tool output
         await settle(app, pilot)
-        assert [c.id for c in app.shown] == [AGY_ID]
-        await pilot.press("enter")
+        assert [c.id for c in app.shown] == [AGY_ID]  # no Enter needed: the match joins as soon as the text is read
+        assert not app.indexing and "narwhal" in str(app.query_one("#detail").render())
+        await pilot.press("enter", "enter")
         await settle(app, pilot)
-        assert app.screen.show_tools and len(app.screen.hits) == 1  # match was in hidden tool output
+        assert app.screen.show_tools and len(app.screen.hits) == 1  # the viewer opens on the match, tool output shown
         await pilot.press("escape", "escape")
         await pilot.pause()
         assert len(app.shown) == 4
+    drive(script)
+
+
+def test_search_mixes_titles_text_and_terms(stores):
+    async def script(app, pilot):
+        box = app.query_one("#query", Input)
+        await pilot.press("slash")
+        for query, expected in [
+            ("tunnel", {AGY_ID}),                    # in a title: answered at once
+            ("tunnel narwhal", {AGY_ID}),            # one word in the title, the other only inside
+            ("tool:codex narwhal", set()),           # the term still narrows
+            ("tests", {CODEX_ID}),                   # only said inside a Codex conversation
+            ("reversed", {CLAUDE_ID}),
+            ("zebrafish tool:claude", {CLAUDE_ID}),  # inside Claude tool output
+            ("nowhere-at-all", set()),
+        ]:
+            box.value = query
+            await settle(app, pilot)
+            assert {c.id for c in app.shown} == expected, query
+    drive(script)
+
+
+def test_search_text_is_reread_after_a_conversation_changes(stores):
+    async def script(app, pilot):
+        await pilot.press("slash", *"walrus")
+        await settle(app, pilot)
+        assert app.shown == []
+        c = get("claude", CLAUDE_ID)
+        with open(c.paths[0], "a") as f:
+            f.write("\n" + json.dumps({"type": "user", "timestamp": "2026-01-05T10:00:00Z", "cwd": str(stores["cwd"]),
+                                       "message": {"role": "user", "content": "walrus"}}) + "\n")
+        await pilot.press("enter", "f5")
+        await settle(app, pilot)
+        assert [c.id for c in app.shown] == [CLAUDE_ID]
     drive(script)
 
 

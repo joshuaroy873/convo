@@ -13,9 +13,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import DataTable, Footer, Input, Label, OptionList, RichLog, Static
+from textual.widgets import DataTable, Footer, Input, Label, RichLog, Static
 
-from . import config, orphans, store, trash
+from . import config, orphans, stats, store, trash
 from .cli import command_line, resume
 from .common import Conv, Msg, human_size, one_line, short_path, when
 from .query import parse
@@ -77,16 +77,16 @@ class Confirm(ModalScreen):
 
 HELP = """\
 [b]List[/b]
-  enter      actions for the conversation   v      view it
-  r          resume it in its tool          g      quit, leaving the shell in its folder
-  /          filter (see below)             s      search inside every conversation
+  enter      open the conversation          r      resume it in its tool
+  s          stats for what is listed       g      quit, leaving the shell in its folder
+  /          search titles, projects and what was said inside conversations
   t          cycle the tool filter          o      cycle the sort order
   b          group by project / date        m      Claude's memory notes
   n          rename                         y      copy the command that resumes it
   space      mark for a bulk trash          d      trash the marked ones, or this one
   u          undo the last trash            e / E  export Markdown / JSON
   c          clean up orphans               f5     reload
-  esc        clear marks, then filters      q      quit
+  esc        clear marks, then the search   q      quit
 
 [b]Inside a conversation[/b]
   t          show or hide tool output       /      find text
@@ -94,9 +94,13 @@ HELP = """\
   g / G      top / end                      e      export Markdown
   esc        back
 
-[b]Filter terms[/b]  (mix with plain words)
-  tool:claude,codex   -tool:agy       via:cli   via:vscode   via:ide
-  dir:backend,!test                   date:today  yesterday  week  month  <2d  >1w
+[b]Search terms[/b]  (mix with plain words)
+  tool:claude        only Claude            -tool:claude     everything except Claude
+  tool:claude,codex  Claude or Codex        via:cli          started in a terminal
+  via:vscode         started in VS Code     via:ide          started in the Antigravity IDE
+  dir:backend        project folder contains "backend"       dir:backend,!test   …but not "test"
+  date:today         also yesterday, week, month
+  date:<2d           active in the last 2 days               date:>1w            not active for over a week
 """
 
 
@@ -222,34 +226,25 @@ class Orphans(Screen):
         self.dismiss()
 
 
-class Menu(ModalScreen):
-    """What can be done with one conversation."""
+class Stats(Screen):
+    """Totals for the conversations currently listed."""
 
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
-    ITEMS = [("open", "View"), ("resume", "Resume in its tool"), ("rename", "Rename"), ("copy", "Copy the resume command"),
-             ("export", "Export to Markdown"), ("goto", "Quit, leaving the shell in its folder"), ("trash", "Move to trash")]
+    BINDINGS = [Binding("escape,q,s", "back", "Back")]
 
-    def __init__(self, conv: Conv):
+    def __init__(self, convs: list[Conv], scope: str):
         super().__init__()
-        self.conv = conv
+        self.convs, self.scope = convs, scope
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="box"):
-            yield Label(Text(one_line(self.conv.title, 68), style="bold"))
-            yield OptionList(*[f"{i}  {label}" for i, (_, label) in enumerate(self.ITEMS, 1)], id="menu")
-            yield Label("enter or a number = choose · esc = cancel", classes="hint")
+        yield Static(f" Stats  {self.scope}", id="vhead")
+        yield RichLog(id="log", wrap=False, markup=False, highlight=False, auto_scroll=False)
+        yield Footer()
 
-    @on(OptionList.OptionSelected, "#menu")
-    def chosen(self, event: OptionList.OptionSelected) -> None:
-        self.dismiss(self.ITEMS[event.option_index][0])
+    def on_mount(self) -> None:
+        self.query_one("#log", RichLog).write(Text(stats.report(self.convs, len(trash.entries()))))
 
-    def on_key(self, event) -> None:
-        if event.key.isdigit() and 1 <= int(event.key) <= len(self.ITEMS):
-            event.stop()
-            self.dismiss(self.ITEMS[int(event.key) - 1][0])
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
+    def action_back(self) -> None:
+        self.dismiss()
 
 
 class Note(Screen):
@@ -532,6 +527,7 @@ class Viewer(Screen):
 class ConvoApp(App):
     TITLE = "convo"
     CSS = """
+    #stats { height: auto; background: $boost; padding: 0 1; }
     #status { height: 1; background: $primary-darken-2; color: $text; padding: 0 1; }
     #query, #find { display: none; height: 3; }
     #query.on, #find.on { display: block; }
@@ -542,19 +538,18 @@ class ConvoApp(App):
     #log { height: 1fr; padding: 0 1; }
     Ask, Confirm { align: center middle; }
     #box { width: 76; max-width: 95%; height: auto; border: round $primary; background: $surface; padding: 1 2; }
-    #helpbox { width: 92; max-width: 98%; height: auto; border: round $primary; background: $surface; padding: 1 2; }
+    #helpbox { width: 104; max-width: 98%; height: auto; border: round $primary; background: $surface; padding: 1 2; }
     Help { align: center middle; }
     .hint { color: $text-muted; margin-top: 1; }
     """
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("slash", "filter", "Filter"),
-        Binding("s", "search", "Search text"),
+        Binding("slash", "filter", "Search"),
         Binding("t", "tool", "Tool", show=False),
         Binding("o", "sort", "Sort", show=False),
         Binding("r", "resume", "Resume", show=False),
         Binding("n", "rename", "Rename", show=False),
-        Binding("v", "open", "View"),
+        Binding("s", "stats", "Stats"),
         Binding("space", "mark", "Mark"),
         Binding("d", "trash", "Trash"),
         Binding("u", "undo", "Undo trash"),
@@ -583,14 +578,14 @@ class ConvoApp(App):
         self.marks: set[str] = set()
         self.tool: str | None = None
         self.sort = next(i for i, (name, _) in enumerate(SORTS) if name == self.cfg.sort)
-        self.mode = "filter"
-        self.needle = ""
-        self.hits: dict[str, tuple[int, str]] | None = None
-        self._text: dict[str, tuple[float, str]] = {}
-        self.searching = False
+        # what was said in each conversation, read in the background the first time a search needs it
+        self.texts: dict[str, tuple[float, str, str]] = {}
+        self.indexing = False
+        self.unreadable: set[str] = set()
         self.sel: str | None = None
 
     def compose(self) -> ComposeResult:
+        yield Static(id="stats")
         yield Static(id="status")
         yield Input(id="query")
         yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
@@ -617,8 +612,10 @@ class ConvoApp(App):
             self.notify(f"{e} (showing what was listed before)", severity="warning")
         self.all = convs
         self.marks &= {c.key for c in convs}
+        self.unreadable.clear()
         self.sel = keep or self.sel
         self.fill(keep)
+        self.read_texts()
 
     def current(self) -> Conv | None:
         item = self.row_item()
@@ -657,6 +654,7 @@ class ConvoApp(App):
         return out
 
     def fill(self, keep: str | None = None) -> None:
+        self.query_one("#stats", Static).update(stats.panel(self.all, TOOL_STYLE, len(trash.entries()), self.size.width - 2))
         t = self.query_one("#table", DataTable)
         cur = self.row_item()
         # self.sel remembers the selection while a filter hides it, e.g. right after a rename
@@ -666,9 +664,7 @@ class ConvoApp(App):
         for c in self.all:
             if self.tool and c.tool != self.tool:
                 continue
-            if self.hits is not None and c.key not in self.hits:
-                continue
-            if query.match(c):
+            if query.match(c, self.said(c)[1]):
                 rows.append(c)
         rows.sort(key=SORTS[self.sort][1])
         self.shown = rows
@@ -702,26 +698,18 @@ class ConvoApp(App):
         self.paint()
 
     def paint(self) -> None:
-        n = {k: sum(1 for c in self.all if c.tool == k) for k in store.SOURCES}
-        parts = [f"{len(self.shown)}/{len(self.all)} conversations",
-                 " · ".join(f"{k} {v}" for k, v in n.items()),
-                 f"sort: {SORTS[self.sort][0]}"]
+        parts = [f"{len(self.shown)} of {len(self.all)} shown", f"sort: {SORTS[self.sort][0]}"]
         if self.group != "none":
             parts.append(f"group: {self.group}")
         if self.tool:
             parts.append(f"tool: {self.tool}")
         if self.flt:
-            parts.append(f"filter: {self.flt}")
-        if self.searching:
-            parts.append("searching…")
-        elif self.hits is not None:
-            parts.append(f"text: “{self.needle}” (esc clears)")
+            parts.append(f"search: {self.flt}")
+        if self.indexing:
+            parts.append("reading conversations…")
         if self.marks:
             parts.append(f"marked: {len(self.marks)}")
-        ntrash = len(trash.entries())
-        if ntrash:
-            parts.append(f"trash: {ntrash}")
-        self.query_one("#status", Static).update("  |  ".join(parts))
+        self.query_one("#status", Static).update("  ·  ".join(parts))
         c = self.current()
         d = self.query_one("#detail", Static)
         if not c:
@@ -738,10 +726,12 @@ class ConvoApp(App):
                     f"{when(c.created, True)} → {when(c.updated, True)}\n", style="dim")
         branch = f"  ⎇ {c.branch}" if c.branch else ""
         body.append(f"{c.id}   {short_path(c.cwd) or '-'}{missing}{branch}\n", style="dim")
-        if self.hits is not None and c.key in self.hits:
-            count, snip = self.hits[c.key]
-            body.append(f"{count} match{'es' if count != 1 else ''}: ", style="yellow")
-            body.append(snip)
+        text, low = self.said(c)
+        word = parse(self.flt).inside(c, low)
+        if word:
+            i, count = low.find(word), low.count(word)
+            body.append(f"“{word}” {count} time{'s' if count != 1 else ''} inside: ", style="yellow")
+            body.append(one_line(text[max(0, i - 80):i + 160], 240))
         else:
             body.append("» " + (one_line(c.first, 400) or "(no prompt)"))
         d.update(body)
@@ -759,21 +749,18 @@ class ConvoApp(App):
         if isinstance(item, str):
             self.folded ^= {item}
             self.fill(self.row_key(item))
-        elif item and self.cfg.enter == "menu":
-            self.push_screen(Menu(item), self.menu_choice)
         elif item:
             self.action_open()
 
-    def menu_choice(self, choice: str | None) -> None:
-        if choice == "export":
-            self.action_export("md")
-        elif choice:
-            getattr(self, f"action_{choice}")()
+    def action_stats(self) -> None:
+        scope = f"for the {len(self.shown)} conversations matching “{self.flt}”" if self.flt or self.tool \
+            else f"for all {len(self.shown)} conversations"
+        self.push_screen(Stats(list(self.shown), scope))
 
     def action_open(self) -> None:
         c = self.current()
         if c:
-            self.push_screen(Viewer(c, self.needle if self.hits is not None else ""))
+            self.push_screen(Viewer(c, parse(self.flt).inside(c, self.said(c)[1]) or ""))
 
     def action_group(self) -> None:
         self.group = GROUPS[(GROUPS.index(self.group) + 1) % len(GROUPS)]
@@ -798,69 +785,58 @@ class ConvoApp(App):
 
     # --- filter and full-text search ---
 
-    def _ask_inline(self, mode: str, placeholder: str, value: str) -> None:
-        self.mode = mode
-        box = self.query_one("#query", Input)
-        box.placeholder = placeholder
-        box.add_class("on")
-        box.value = value
-        box.focus()
-
     def action_filter(self) -> None:
-        self._ask_inline("filter", "filter: words, tool:claude, via:vscode, dir:name, date:<2d  (? for help)", self.flt)
-
-    def action_search(self) -> None:
-        self._ask_inline("search", "search inside all conversations (enter to run)…", self.needle)
+        box = self.query_one("#query", Input)
+        box.placeholder = "words to find in titles, projects and conversations · tool:claude via:vscode dir:name date:<2d"
+        box.add_class("on")
+        box.value = self.flt
+        box.focus()
 
     @on(Input.Changed, "#query")
     def typed(self, event: Input.Changed) -> None:
-        if self.mode == "filter" and event.value != self.flt:
+        if event.value != self.flt:
             self.flt = event.value
-            self.fill()
+            self.fill()  # titles and projects answer at once; conversation text joins when it has been read
+            self.read_texts()
 
     @on(Input.Submitted, "#query")
     def entered(self, event: Input.Submitted) -> None:
         event.input.remove_class("on")
         self.query_one("#table", DataTable).focus()
-        if self.mode == "search":
-            q = event.value.strip()
-            if q:
-                self.needle, self.searching = q, True
-                self.paint()
-                self.run_search(q)
-            else:
-                self.hits = None
-                self.fill()
 
-    def fulltext(self, c: Conv) -> str:
-        hit = self._text.get(c.key)
-        if hit and hit[0] == c.updated:
-            return hit[1]
-        text = "\n".join(m.text for m in store.messages(c))
-        self._text[c.key] = (c.updated, text)
-        return text
+    def said(self, c: Conv) -> tuple[str, str]:
+        """A conversation's text and its lowercase form, or empty strings until it has been read."""
+        hit = self.texts.get(c.key)
+        return (hit[1], hit[2]) if hit and hit[0] == c.updated else ("", "")
 
-    @work(thread=True, exclusive=True, group="search")
-    def run_search(self, q: str) -> None:
-        low = q.lower()
-        hits = {}
+    def read_texts(self) -> None:
+        """Start reading conversation text if a search needs it and some is missing."""
+        if self.indexing or not parse(self.flt).words:
+            return
+        if any(not self.said(c)[1] and c.key not in self.unreadable for c in self.all):
+            self.indexing = True
+            self.paint()
+            self.index()
+
+    @work(thread=True, exclusive=True, group="index")
+    def index(self) -> None:
         for c in list(self.all):
-            try:
-                text = self.fulltext(c)
-            except Exception:
+            if self.said(c)[1] or c.key in self.unreadable:
                 continue
-            lowered = text.lower()
-            count = lowered.count(low)
-            if count:
-                i = lowered.find(low)
-                hits[c.key] = (count, one_line(text[max(0, i - 80):i + 160], 240))
-        self.call_from_thread(self.search_done, hits)
+            try:
+                text = store.text_of(c)
+            except Exception:
+                text = ""
+            if text:
+                self.texts[c.key] = (c.updated, text, text.lower())
+            else:
+                self.unreadable.add(c.key)  # nothing to search; do not try again on every keystroke
+        self.call_from_thread(self.indexed)
 
-    def search_done(self, hits: dict) -> None:
-        self.searching = False
-        self.hits = hits
+    def indexed(self) -> None:
+        self.indexing = False
         self.fill()
-        self.notify(f"{len(hits)} conversation(s) contain “{self.needle}”", timeout=3)
+        self.read_texts()  # the list may have been reloaded meanwhile
 
     def action_clear(self) -> None:
         box = self.query_one("#query", Input)
@@ -872,8 +848,8 @@ class ConvoApp(App):
             self.marks.clear()
             self.fill()
             return
-        if self.flt or self.hits is not None or self.tool:
-            self.flt, self.hits, self.tool = "", None, None
+        if self.flt or self.tool:
+            self.flt, self.tool = "", None
             self.fill()
 
     def action_tool(self) -> None:

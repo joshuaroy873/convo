@@ -152,3 +152,21 @@ def test_list_with_filter_and_doctor(stores, capsys):
     out = capsys.readouterr().out
     assert out.count("rename and trash available") == 3
     assert "hidden    1 subagent" in out and "listed    2 conversation(s)" in out
+
+
+def test_commands_search_inside_conversations(stores, capsys):
+    convs, _ = store.load_all()
+    assert [c.id for c in store.search(convs, "narwhal")] == [AGY_ID]
+    assert [c.id for c in store.search(convs, "tool:claude narwhal")] == []
+    assert store.find(convs, "three tests").id == CODEX_ID
+    cli.main(["list", "zebrafish"])
+    out = capsys.readouterr().out
+    assert "Reversing a list" in out and "Tunnel" not in out
+
+
+def test_words_can_match_text_when_it_is_given():
+    c = conv()
+    q = parse("auth pineapple")
+    assert not q.match(c) and q.match(c, "we talked about pineapple here")
+    assert q.inside(c, "we talked about pineapple here") == "pineapple"
+    assert parse("auth").inside(c, "auth appears inside too") is None  # already explained by the title

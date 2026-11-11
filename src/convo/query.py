@@ -1,4 +1,7 @@
-"""The filter language of the list: plain words plus tool:, via:, dir: and date: terms.
+"""The search language of the list: plain words plus tool:, via:, dir: and date: terms.
+
+A plain word matches a conversation's title, project, branch, tool or id, or
+anything said inside it when its text is supplied.
 
     tool:claude,codex   -tool:agy   tool:claude,!codex
     via:vscode          dir:backend,!test
@@ -32,7 +35,17 @@ class Query:
     since: float | None = None
     until: float | None = None
 
-    def match(self, c: Conv) -> bool:
+    @staticmethod
+    def about(c: Conv) -> str:
+        return f"{c.tool} {c.origin} {c.title} {c.cwd} {c.id} {c.branch}".lower()
+
+    def inside(self, c: Conv, text: str) -> str | None:
+        """The first word found only in what was said, not in the title or project."""
+        about = self.about(c)
+        return next((w for w in self.words if w not in about and w in text), None)
+
+    def terms(self, c: Conv) -> bool:
+        """The tool:, via:, dir: and date: terms alone, which never need the text."""
         if (self.tools and c.tool not in self.tools) or c.tool in self.not_tools:
             return False
         if (self.vias and c.origin not in self.vias) or c.origin in self.not_vias:
@@ -40,10 +53,14 @@ class Query:
         cwd = c.cwd.lower()
         if (self.dirs and not any(d in cwd for d in self.dirs)) or any(d in cwd for d in self.not_dirs):
             return False
-        if (self.since is not None and c.updated < self.since) or (self.until is not None and c.updated >= self.until):
+        return not ((self.since is not None and c.updated < self.since) or (self.until is not None and c.updated >= self.until))
+
+    def match(self, c: Conv, text: str = "") -> bool:
+        """`text` is the lowercased conversation; without it only titles and the like are searched."""
+        if not self.terms(c):
             return False
-        hay = f"{c.tool} {c.origin} {c.title} {c.cwd} {c.id} {c.branch}".lower()
-        return all(w in hay for w in self.words)
+        about = self.about(c)
+        return all(w in about or w in text for w in self.words)
 
 
 def _pick(value: str, known: tuple[str, ...]) -> str | None:

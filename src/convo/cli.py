@@ -13,7 +13,6 @@ from pathlib import Path
 
 from . import config, orphans, stats, store, trash
 from .common import CACHE, human_size, one_line, short_path, when
-from .query import parse
 
 
 def _load():
@@ -24,8 +23,7 @@ def _load():
 
 
 def cmd_list(a):
-    q = parse(" ".join(a.query))
-    convs = [c for c in _load() if (not a.tool or c.tool == a.tool) and q.match(c)]
+    convs = store.search([c for c in _load() if not a.tool or c.tool == a.tool], " ".join(a.query))
     if a.json:
         print(json.dumps([{**c.__dict__, "key": c.key} for c in convs], indent=1))
         return
@@ -108,8 +106,7 @@ def resume(c) -> None:
 
 
 def cmd_stats(a):
-    q = parse(" ".join(a.query))
-    print(stats.report([c for c in _load() if q.match(c)], len(trash.entries())))
+    print(stats.report(store.search(_load(), " ".join(a.query)), len(trash.entries())))
 
 
 def cmd_orphans(a):
@@ -200,7 +197,7 @@ def cmd_config(a):
         print(f"wrote {short_path(str(config.PATH))}")
         return
     print(f"{short_path(str(config.PATH))}  ({'found' if config.PATH.exists() else 'not created; defaults in use'})")
-    for key in ("sort", "group", "enter", "show_tools", "export_dir"):
+    for key in ("sort", "group", "show_tools", "export_dir"):
         print(f"  {key:11} {getattr(cfg, key)!r}")
     for problem in cfg.problems:
         print(f"  problem     {problem}")
@@ -270,7 +267,7 @@ def main(argv=None):
     s = sub.add_parser("list", help="list conversations")
     s.add_argument("--tool", choices=list(store.SOURCES))
     s.add_argument("--json", action="store_true")
-    s.add_argument("query", nargs="*", help="filter, e.g. dir:backend date:<2d auth")
+    s.add_argument("query", nargs="*", help="search, e.g. dir:backend date:<2d auth")
     s.set_defaults(fn=cmd_list)
     s = sub.add_parser("show", help="print a conversation as Markdown")
     s.add_argument("id")

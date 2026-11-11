@@ -10,7 +10,7 @@ import pytest
 from conftest import AGY_ID, CLAUDE_ID, CLAUDE_LIVE_ID, fingerprint, get
 from convo import cli, config, store, trash
 from convo.sources import claude
-from convo.tui import Ask, Confirm, Memory, Menu, Note, Viewer
+from convo.tui import Confirm, Memory, Note, Stats, Viewer
 from test_app import drive, settle
 
 
@@ -29,14 +29,14 @@ def end_live_session(stores):
 
 def test_defaults_without_a_file(stores):
     cfg = config.load()
-    assert (cfg.sort, cfg.group, cfg.enter, cfg.show_tools, cfg.export_dir, cfg.problems) == ("updated", "none", "menu", False, "", [])
+    assert (cfg.sort, cfg.group, cfg.show_tools, cfg.export_dir, cfg.problems) == ("updated", "none", False, "", [])
 
 
 def test_settings_file_is_read_and_checked(stores):
     config.PATH.parent.mkdir(parents=True)
-    config.PATH.write_text('sort = "size"\ngroup = "sideways"\nenter = "open"\nshow_tools = true\ncolour = "blue"\n')
+    config.PATH.write_text('sort = "size"\ngroup = "sideways"\nshow_tools = true\ncolour = "blue"\n')
     cfg = config.load()
-    assert (cfg.sort, cfg.group, cfg.enter, cfg.show_tools) == ("size", "none", "open", True)
+    assert (cfg.sort, cfg.group, cfg.show_tools) == ("size", "none", True)
     assert len(cfg.problems) == 2 and "sideways" in cfg.problems[0] and "colour" in cfg.problems[1]
     config.PATH.write_text("this is = not [toml")
     assert config.load().sort == "updated" and len(config.load().problems) == 1
@@ -50,7 +50,7 @@ def test_template_matches_the_defaults(stores, capsys):
         cli.main(["config", "--init"])
     capsys.readouterr()
     cli.main(["config"])
-    assert "enter       'menu'" in capsys.readouterr().out
+    assert "group       'none'" in capsys.readouterr().out
 
 
 def test_export_folder_setting(stores, capsys):
@@ -64,7 +64,7 @@ def test_settings_shape_the_list(stores):
     async def script(app, pilot):
         assert app.group == "project"
         assert [c.size for c in app.shown] == sorted((c.size for c in app.shown), reverse=True)  # largest first
-        await pilot.press("down", "v")
+        await pilot.press("down", "enter")
         await settle(app, pilot)
         assert isinstance(app.screen, Viewer) and app.screen.show_tools
     drive(script, sort="size", group="project", show_tools=True)
@@ -82,7 +82,7 @@ def test_group_by_project_and_fold(stores):
         await pilot.press("up")
         await pilot.pause()
         assert app.current() is None
-        await pilot.press("d", "space", "v")  # nothing acts on a heading
+        await pilot.press("d", "space", "r")  # nothing acts on a heading
         await pilot.pause()
         assert len(app.screen_stack) == 1 and not app.marks and trash.entries() == []
         await pilot.press("enter")
@@ -98,23 +98,31 @@ def test_group_by_project_and_fold(stores):
     drive(script)
 
 
-# --- action menu ---
+# --- stats screen and going to a folder ---
 
-def test_enter_opens_the_action_menu(stores):
+def test_stats_screen_covers_what_is_listed(stores):
+    async def script(app, pilot):
+        await pilot.press("s")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, Stats) and len(screen.convs) == 4 and "all 4 conversations" in screen.scope
+        shown = "\n".join(strip.text for strip in screen.query_one("#log").lines)
+        assert "conversations   4" in shown and "By tool" in shown and "Busiest projects" in shown
+        await pilot.press("escape", "slash", *"tool:codex", "enter", "s")
+        await pilot.pause()
+        assert len(app.screen.convs) == 1 and "tool:codex" in app.screen.scope
+        await pilot.press("s")  # the same key closes it
+        await pilot.pause()
+        assert len(app.screen_stack) == 1
+    drive(script)
+
+
+def test_enter_opens_the_conversation(stores):
     async def script(app, pilot):
         await pilot.press("slash", *"tool:agy", "enter", "enter")
-        await pilot.pause()
-        assert isinstance(app.screen, Menu)
-        await pilot.press("escape", "enter", "1")
         await settle(app, pilot)
         assert isinstance(app.screen, Viewer) and app.screen.conv.id == AGY_ID
-        await pilot.press("escape", "enter", "3")
-        await pilot.pause()
-        assert isinstance(app.screen, Ask)
-        await pilot.press("escape", "enter", "down", "down", "down", "down", "down", "down", "enter")
-        await pilot.pause()
-        assert isinstance(app.screen, Confirm) and "Move this agy conversation" in app.screen.prompt
-    drive(script, enter="menu")
+    drive(script)
 
 
 def test_go_to_folder_ends_with_the_folder(stores):
@@ -270,3 +278,37 @@ def test_wrapper_changes_the_shell_folder(stores, capsys):
                                      env=env, capture_output=True, text=True).stdout.strip()
     assert run("go") == f"7 {dest}"  # folder changed, exit status passed through
     assert run("stay") == "7 /"
+
+
+def test_stats_panel_counts_everything_and_shrinks():
+    import time
+
+    from convo import stats
+    from convo.common import Conv
+
+    now = time.mktime((2026, 11, 11, 15, 0, 0, 0, 0, -1))
+    styles = {"claude": "red", "codex": "green", "agy": "blue"}
+    convs = [Conv(tool=t, id=f"{t}{i}", title="x", cwd="/p", origin="cli", created=now - d * 86400, updated=now - d * 86400,
+                  size=1024, nmsg=10, paths=[])
+             for i, (t, d) in enumerate([("claude", 0), ("claude", 0), ("claude", 3), ("codex", 9), ("agy", 40)])]
+    wide = stats.panel(convs, styles, 4, 120, now).plain.split("\n")
+    assert len(wide) == 3
+    assert wide[0].startswith("claude ") and " 3 " in wide[0] and "5 chats" in wide[0] and "last 14 days" in wide[0]
+    assert "50 messages" in wide[1] and "today 2 · this week 3" in wide[1]
+    assert "on disk" in wide[2] and "trash 4" in wide[2]
+    medium = stats.panel(convs, styles, 4, 70, now).plain
+    assert "50 messages" in medium and "today" not in medium
+    assert stats.panel(convs, styles, 4, 40, now).plain == "5 chats  claude 3  codex 1  agy 1  trash 4"
+    assert stats.panel([], styles, 0, 120, now).plain.count("\n") == 2
+
+
+def test_list_shows_the_stats_panel(stores):
+    async def script(app, pilot):
+        panel = str(app.query_one("#stats").render())
+        assert "4 chats" in panel and "claude" in panel and "last 14 days" in panel
+        assert "4 of 4 shown" in str(app.query_one("#status").render())
+        await pilot.press("slash", *"tool:codex", "enter")
+        await pilot.pause()
+        assert "4 chats" in str(app.query_one("#stats").render())  # the panel is about everything, searched or not
+        assert "1 of 4 shown" in str(app.query_one("#status").render())
+    drive(script)

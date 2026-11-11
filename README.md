@@ -20,14 +20,14 @@ Requires Python 3.11+. The command is `convo`.
 
 ## Use
 
-Run `convo` for the interactive view, or `convo some words` to open it already filtered.
+Run `convo` for the interactive view, or `convo some words` to open it already searched.
+
+The panel at the top counts everything convo found: conversations per tool, totals, and how many were last active on each of the past 14 days. It stays the same while you search; `s` gives fuller stats for what is listed.
 
 | Key | In the list | Inside a conversation |
 |---|---|---|
-| `enter` | actions for the conversation (or fold a group) | |
-| `v` | view the conversation | |
-| `/` | filter (see below) | find text |
-| `s` | search inside every conversation | |
+| `enter` | open the conversation (or fold a group) | |
+| `/` | search titles, projects and what was said (see below) | find text |
 | `t` | cycle the tool filter | show or hide tool output and thinking |
 | `o` | cycle the sort order | |
 | `b` | group by project, by date, or not at all | |
@@ -38,40 +38,51 @@ Run `convo` for the interactive view, or `convo some words` to open it already f
 | `d` / `u` | trash the marked ones (or this one) / undo the last trash | |
 | `e` / `E` | export Markdown / JSON | export Markdown |
 | `[` `]` | | previous / next prompt |
+| `s` | stats for the conversations listed | |
 | `g` | quit, leaving your shell in the conversation's folder | |
 | `m` | Claude's memory notes | |
 | `c` | clean up orphans | |
 | `?` | show all keys | show all keys |
-| `esc` | clear marks, then filters | back |
+| `esc` | clear marks, then the search | back |
 | `q` | quit | back |
 
-### Filter terms
+### Search
 
-Mix these with plain words, in the `/` box or on the command line:
+`/` is the one search box. Plain words match a conversation's title, project folder, git branch, tool or id, and also anything said inside it, tool output included. Titles and projects answer as you type; matches from inside conversations join a moment later, the first time while the transcripts are read.
 
-```text
-tool:claude,codex    -tool:agy    tool:claude,!codex
-via:cli              via:vscode   via:ide
-dir:backend,!test
-date:today  date:yesterday  date:week  date:month  date:<2d  date:>1w
-```
+Mix words with these terms, in the `/` box or on the command line:
 
-Plain words match the title, project folder, git branch, tool and id. On the command line, write an exclusion as `tool:!agy` rather than `-tool:agy`, which the shell-side parser would read as an option.
+| Term | Shows |
+|---|---|
+| `tool:claude` | only Claude conversations |
+| `tool:claude,codex` | Claude or Codex |
+| `-tool:claude` | everything except Claude |
+| `via:cli` | conversations started in a terminal |
+| `via:vscode` | conversations started in a VS Code panel |
+| `via:ide` | conversations started in the Antigravity IDE |
+| `dir:backend` | project folder path contains "backend" |
+| `dir:backend,!test` | contains "backend" but not "test" |
+| `date:today`, `date:yesterday`, `date:week`, `date:month` | last active in that period |
+| `date:<2d`, `date:>1w` | active within the last 2 days; not active for over a week |
+
+`tool:` is which assistant you talked to and `via:` is where you ran it, so `tool:claude via:vscode` is Claude used from VS Code. A minus in front of a term, or `!` in front of a value, excludes it.
+
+On the command line, write an exclusion as `tool:!agy` rather than `-tool:agy`, which the shell-side parser would read as an option.
 
 ### Commands
 
 ```sh
-convo [filter]                      # interactive view
-convo list [--tool T] [--json] [filter]
+convo [search]                      # interactive view
+convo list [--tool T] [--json] [search]
 convo show <id> [--tools]           # print as Markdown
 convo export <id> [-f md|json] [-o FILE] [--tools]
 convo rename <id> "New title"
-convo resume <id or filter>         # by id, or the most recent match
+convo resume <id or search>         # by id, or the most recent match
 convo rm <id>                       # move to trash
 convo trash [list|restore [N]|empty]
 convo rm <id> --dry-run             # show what a trash would move
 convo orphans [--trash]             # empty conversations, missing projects, leftover files
-convo stats [filter]                # totals by tool and project, and when you were active
+convo stats [search]                # totals by tool and project, and when you were active
 convo trash log                     # what was trashed, restored and deleted, and when
 convo memory [--project DIR]        # the notes Claude keeps between sessions
 convo config [--init]               # settings in use; --init writes a file of defaults
@@ -88,7 +99,6 @@ Optional, in `~/.config/convo/config.toml` (`convo config --init` writes it):
 ```toml
 sort = "updated"      # updated | created | size | messages | title | project
 group = "none"        # none | project | date
-enter = "menu"        # what Enter does on a conversation: menu | open
 show_tools = false    # show tool output and thinking when a conversation opens
 export_dir = ""       # where exports go; empty means ~/Documents/chat-exports
 ```
