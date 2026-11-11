@@ -4,7 +4,27 @@ One terminal view of every conversation you've had with **Claude Code**, **Codex
 
 ![convo listing conversations from Claude Code, Codex and Antigravity](docs/screenshot.png)
 
-Linux only for now.
+## What it can do
+
+- **List everything in one place:** conversations from Claude Code, Codex and Antigravity, started in a terminal, a VS Code panel or the Antigravity IDE.
+- **Search:** titles, project folders, and everything said inside the conversations.
+- **Read:** open any conversation, with or without tool output and thinking.
+- **Resume:** reopen a conversation in the terminal program of the tool that owns it.
+- **Rename:** the new title shows up in the owning tool as well.
+- **Trash and restore:** nothing is erased until you empty convo's trash.
+- **Export:** Markdown or JSON.
+- **Clean up:** find empty conversations and files a tool left behind.
+- **Stats:** counts per tool, messages, disk use and recent activity.
+
+## What it cannot do
+
+- **Linux only.** macOS and Windows are not supported.
+- **Local conversations only.** Chats on claude.ai, ChatGPT or other web apps are not read, nor are conversations on a remote host reached over VS Code Remote SSH.
+- **Resume always opens a terminal.** A conversation started in a VS Code panel resumes in that tool's CLI, not back in the panel.
+- **Antigravity IDE conversations are only partly supported.** They can be listed, searched, read, renamed, trashed and exported. Resuming them is untested: convo hands the id to the `agy` CLI, which keeps its own store apart from the IDE's, so it may not open. If it does not, reopen the conversation in the IDE.
+- **No editing.** convo never changes what was said in a conversation.
+- **A running tool may lag.** An open VS Code panel or IDE can keep showing an old title or a trashed conversation until it restarts.
+- **Helper threads are hidden.** Codex subagent and `codex exec` threads are not listed.
 
 > **convo edits other tools' private data.** Rename and trash write to storage that Claude Code, Codex and Antigravity do not document and may change in any release. Trash is reversible until you empty it, and convo refuses to write when a store looks unfamiliar, but keep a backup of anything you cannot afford to lose.
 
@@ -48,7 +68,7 @@ The panel at the top counts everything convo found: conversations per tool, tota
 
 ### Search
 
-`/` is the one search box. Plain words match a conversation's title, project folder, git branch, tool or id, and also anything said inside it, tool output included. Titles and projects answer as you type; matches from inside conversations join a moment later, the first time while the transcripts are read.
+`/` searches titles, project folders, git branches and everything said inside the conversations. Matches from inside conversations appear a moment after the rest.
 
 Mix words with these terms, in the `/` box or on the command line:
 
@@ -115,15 +135,11 @@ A program cannot change the folder of the shell that started it, so `g` needs a 
 
 `d` (or `convo rm`) moves a conversation's files out of the owning tool's storage into `~/.local/share/convo/trash`, together with the index records that pointed at it, so the tool no longer lists it. `u` (or `convo trash restore`) puts everything back. Nothing is erased until `convo trash empty`.
 
-For Claude Code that covers the transcript, its subagent and tool-result folder, file history, task and environment state, scratch folder and the session's rows in the prompt history. For Codex it is what `codex delete` removes, plus its prompt-history rows.
-
-The confirmation lists every path and index record a trash will move. Each trash, restore and permanent delete is appended to `~/.local/share/convo/log.jsonl`.
+The confirmation lists every path and index record a trash will move, and each trash, restore and permanent delete is logged in `~/.local/share/convo/log.jsonl`.
 
 ### Cleaning up
 
-`c` (or `convo orphans`) lists what is probably safe to remove: conversations with no messages, conversations whose project folder is gone, and state a tool left behind for conversations that no longer exist. Each item says why it is listed, and removing one moves it to the trash like anything else. Claude's scratch folders and prompt history are never offered here.
-
-When you trash the last conversation of a project, convo asks whether to also trash what Claude Code still keeps for that project: its memory notes, and its trust and tool-permission entry in `.claude.json`. The answer defaults to no, and it is restorable like anything else.
+`c` (or `convo orphans`) lists what is probably safe to remove: conversations with no messages, conversations whose project folder is gone, and files left behind for conversations that no longer exist. Each item says why it is listed, and removing one moves it to the trash.
 
 A conversation in use cannot be trashed: one open in a running Claude Code session, or a Codex or Antigravity one written to in the last 90 seconds.
 
@@ -134,10 +150,6 @@ A conversation in use cannot be trashed: one open in a running Claude Code sessi
 | Claude Code | `~/.claude/projects/<project>/<id>.jsonl` | Rename appends the same title record as `/rename`. |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`, `state_*.sqlite`, `session_index.jsonl` | A thread split across several rollout files is shown as one conversation. Subagent and `codex exec` threads are hidden. |
 | Antigravity | `~/.gemini/antigravity{,-cli}/conversations/<id>.db` | Messages are protobuf with no published schema; the field layout was worked out from real data and may shift between agy versions. Rename is best effort. If a database cannot be read, the plain-text log agy keeps under `brain/<id>/.system_generated/logs/` is used instead. |
-
-If a tool is running (for example its VS Code panel), it may keep showing an old title or a trashed conversation until it restarts.
-
-Conversations held on a remote host over VS Code Remote SSH live on that host and are not visible here.
 
 ## Configuration
 

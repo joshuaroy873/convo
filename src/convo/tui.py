@@ -22,6 +22,7 @@ from .query import parse
 from .sources import claude
 
 TOOL_STYLE = {"claude": "dark_orange", "codex": "green3", "agy": "dodger_blue1"}
+VIA_STYLE = {"cli": "khaki1", "vscode": "medium_purple1", "ide": "aquamarine3"}
 SORTS = [
     ("updated", lambda c: -c.updated),
     ("created", lambda c: -c.created),
@@ -688,7 +689,8 @@ class ConvoApp(App):
             flag = ("✓ " if c.key in self.marks else "") + ("● " if c.live else "") + ("▣ " if c.archived else "")
             proj = short_path(c.cwd) or "-"
             proj = proj if len(proj) <= 30 else "…" + proj[-29:]
-            t.add_row(Text(c.tool, style=TOOL_STYLE[c.tool]), c.origin, one_line(flag + c.title, wide), proj,
+            t.add_row(Text(c.tool, style=TOOL_STYLE[c.tool]), Text(c.origin, style=VIA_STYLE.get(c.origin, "")),
+                      one_line(flag + c.title, wide), proj,
                       Text(str(c.nmsg), justify="right"), Text(human_size(c.size), justify="right"), when(c.updated),
                       key=c.key)
         first = next((i for i, c in enumerate(self.rows) if isinstance(c, Conv)), 0)
